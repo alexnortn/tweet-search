@@ -1,4 +1,0 @@
-# App secrets
-
-key
-key
