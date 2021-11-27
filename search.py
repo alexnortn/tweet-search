@@ -1,8 +1,10 @@
 from datetime import date, timedelta
+import dateutil.parser
 import time
 import requests
 import os
 import json
+import csv
 # Client secrets
 import secrets
 
@@ -17,8 +19,8 @@ def tweet_time(day):
     tweet_time_start = 'T00:00:00.000Z' 
     tweet_time_end = 'T23:59:59.000Z' 
     
-    day_start = day + tweet_time_start
-    day_end = day + tweet_time_end
+    day_start = day.isoformat() + tweet_time_start
+    day_end = day.isoformat() + tweet_time_end
 
     return [day_start, day_end]
 
@@ -66,6 +68,18 @@ def create_url(keyword, start_time, end_time, max_results = 10):
     return (search_url, query_params)
 
 
+def create_count_url(keyword, start_time, end_time):
+    
+    search_url = "https://api.twitter.com/2/tweets/counts/all" #Change to the endpoint you want to collect data from
+
+    #change params based on the endpoint you are using
+    query_params = {'query': keyword,
+                    'start_time': start_time,
+                    'end_time': end_time,
+                    'next_token': {}}
+    return (search_url, query_params)
+
+
 def connect_to_endpoint(url, headers, params, next_token=None):
     params['next_token'] = next_token 
     response = requests.request("GET", url, headers=headers, params=params)
@@ -76,23 +90,50 @@ def connect_to_endpoint(url, headers, params, next_token=None):
 
 
 def write_json(data):
-    with open('data/test-7.json', 'w') as outfile:
+    with open('data/test-8.json', 'w') as outfile:
         json.dump(data, outfile, indent=2,)
 
 
-def main():
-    json_response = connect_to_endpoint(url[0], headers, url[1])
+# Check tweet volume for query within date/time range
+def getTweetCounts(day, day_last=None):
+    next_token = None
+    total_results = 0
+    flag = True
+    
+    if day_last:        
+        start_time = day.isoformat() + 'T00:00:00.000Z' 
+        end_time = day_last.isoformat() + 'T00:00:00.000Z' 
+    else:
+        start_time, end_time = tweet_time(day)
+    
+    url = create_count_url(keyword, start_time, end_time)
 
-    # Will need to pre-process the response to join the 'data' with the 'includes' section
-    # Probably worth parsing into a CSV here as well
-    
-    # For requests > 500 tweets, use the following
-    # next_token = json_response['meta']['next_token']
-    
-    
-    write_json(json_response)
+    while flag:
 
-    print(json.dumps(json_response, indent=4, sort_keys=True))
+        # Carry out request
+        json_response = connect_to_endpoint(url[0], headers, url[1], next_token)
+        result_count = json_response['meta']['total_tweet_count']
+
+        if 'next_token' in json_response['meta']:
+            # Save the token to use for next call
+            next_token = json_response['meta']['next_token']
+
+            if result_count is not None and result_count > 0 and next_token is not None:
+                print("Start Date: ", start_time)
+                total_results += result_count
+                print(total_results)
+                time.sleep(3)
+        
+        # if no token exists
+        else:
+            if result_count is not None and result_count > 0:
+                print("Start Date: ", start_time)
+                total_results += result_count
+                print(total_results)
+                time.sleep(3)
+
+            next_token = None
+            flag = False
 
 
 # Recursive function to return tweet collection for a given day
@@ -102,7 +143,7 @@ def getTweetCollection(day, max_results_day, max_results_rx):
     next_token = None
 
     start_time, end_time = tweet_time(day)
-    url = create_url(keyword, start_time, end_time, max_results_day)
+    url = create_url(keyword, start_time, end_time, max_results_rx)
 
     while flag:
         # Check if max_results_day reached
@@ -118,30 +159,21 @@ def getTweetCollection(day, max_results_day, max_results_rx):
             next_token = json_response['meta']['next_token']
 
             if result_count is not None and result_count > 0 and next_token is not None:
-                print("Start Date: ", start_list[i])
+                print("Start Date: ", start_time)
                 append_to_csv(json_response, "data.csv")
                 total_results += result_count
-                time.sleep(5)
+                time.sleep(3)
         
         # if no token exists
         else:
             if result_count is not None and result_count > 0:
                 append_to_csv(json_response, "data.csv")
                 total_results += result_count
-                time.sleep(5)
+                time.sleep(3)
 
             next_token = None
             flag = False
         
-
-
-# Create CSV file
-csvFile = open("data.csv", "a", newline="", encoding='utf-8')
-csvWriter = csv.writer(csvFile)
-
-#Create headers for the data you want to save, in this example, we only want save these columns in our dataset
-csvWriter.writerow(['author id', 'created_at', 'geo', 'tweet_id','lang', 'like_count', 'quote_count', 'reply_count','retweet_count','source','tweet', 'username', 'name', 'account_description', 'account_created_at', 'verified', 'followers_count', 'following_count', 'tweet_count', 'listed_count'])
-csvFile.close()
 
 # CSV from JSON parser
 def append_to_csv(json_response, fileName):
@@ -190,8 +222,8 @@ def append_to_csv(json_response, fileName):
         text = tweet['text']
 
         # Join 'data' with 'meta' results
-        for tweet_meta in json_response['meta']:
-            if tweet['author_id'] == tweet_meta['author_id']:
+        for tweet_meta in json_response['includes']['users']:
+            if tweet['author_id'] == tweet_meta['id']:
                 # 9. Username
                 username = tweet_meta['username']
 
@@ -235,13 +267,31 @@ def append_to_csv(json_response, fileName):
     print("# of Tweets added from this response: ", counter)
 
 
+def main():
+
+    # Create CSV file
+    csvFile = open("data.csv", "a", newline="", encoding='utf-8')
+    csvWriter = csv.writer(csvFile)
+
+    #Create headers for the data you want to save, in this example, we only want save these columns in our dataset
+    csvWriter.writerow(['author id', 'created_at', 'geo', 'tweet_id','lang', 'like_count', 'quote_count', 'reply_count','retweet_count','source','tweet', 'username', 'name', 'account_description', 'account_created_at', 'verified', 'followers_count', 'following_count', 'tweet_count', 'listed_count'])
+    csvFile.close()
+
+    # Make the Twitter API requests
+    getTweetCollection(first_date, max_results_day, max_results_rx)
+
+    # json_response = connect_to_endpoint(url[0], headers, url[1]) 
+    # write_json(json_response)
+    # print(json.dumps(json_response, indent=4, sort_keys=True))
+
+
 # -------------------------------------------------------------------------------
 # Inputs for the request · 2132 days » 4500 tweets/day ~ 9 requests / day
 # To avoid asking for duplicates, really we want to ask for 4500 tweets / day and use the nextPage token
 first_date = date(2016, 1, 1)
 last_date = date(2021, 11, 1)
 # Add 1 to be inclusive of final day
-duration_days = first_date - last_date + 1 
+duration_days = (first_date - last_date).days + 1 
 
 day = first_date + timedelta(days=1)
 
@@ -251,12 +301,11 @@ headers = create_headers(bearer_token)
 keyword = '"global warming" OR "climate change" OR #globalwarming OR #climatechange lang:en'
 start_time = "2016-01-01T00:00:00.000Z"
 end_time = "2021-11-01T00:00:00.000Z"
-max_results_rx = 10
-max_results_day = 4500
-
-url = create_url(keyword, start_time, end_time, max_results)
+max_results_rx = 500 # 500 max
+max_results_day = 4500 # ~4500 
 
 
-
+# Let's go!
 if __name__ == "__main__":
-    main()
+    getTweetCounts(first_date, last_date)
+    # main()
