@@ -296,7 +296,7 @@ def main():
 
     # Make the Twitter API requests
     # Offset %2 to sparsely fill in the data set; starting with 1, then 2
-    for delta in range(0, 2, 2): # duration_days
+    for delta in range(0, 2132, 2): # duration_days
         
         day = first_date + timedelta(days=delta)
         file_name = 'data/' + day.isoformat() + '.csv'
@@ -312,9 +312,8 @@ def main():
         getTweetCollection(day, max_results_hour, max_results_rx, file_name)
 
 
-# ----------------------------------------------------------------------------
-# Inputs for the request · 2132 days » 4500 tweets/day ~ 9 requests / day
-# To avoid asking for duplicates, really we want to ask for 4500 tweets / day
+# ------------------------------------------------------------------------------------------
+# Inputs for the request · 2132 days » 7500 tweets/day ~ 3 requests / hour ~ 72 requests/day
 
 first_date = date(2016, 1, 1)
 last_date = date(2021, 11, 1)
@@ -324,6 +323,7 @@ bearer_token = auth()
 headers = create_headers(bearer_token)
 
 keyword = '"global warming" OR "climate change" OR #globalwarming OR #climatechange lang:en'
+
 start_time = "2016-01-01T00:00:00.000Z"
 end_time = "2021-11-01T00:00:00.000Z"
 
