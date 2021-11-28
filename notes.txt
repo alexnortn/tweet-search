@@ -9,3 +9,6 @@ International ~ sampling weighted by usage (automatic)
 
 Misc:
 lang:en
+
+Total Tweets:
+135811382

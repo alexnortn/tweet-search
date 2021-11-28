@@ -25,6 +25,22 @@ def tweet_time(day):
     return [day_start, day_end]
 
 
+# Transform datetime into twitter time
+def tweet_time_hour(day, hour):
+    
+    if (hour < 10):
+        tweet_time_start = 'T0' + str(hour) + ':00:00.000Z'
+        tweet_time_end = 'T0' + str(hour) + ':59:59.000Z' 
+    else:
+        tweet_time_start = 'T' + str(hour) + ':00:00.000Z' 
+        tweet_time_end = 'T' + str(hour) + ':59:59.000Z' 
+    
+    day_start = day.isoformat() + tweet_time_start
+    day_end = day.isoformat() + tweet_time_end
+
+    return [day_start, day_end]
+
+
 def auth():
     return secrets.bearer_token
 
@@ -137,42 +153,46 @@ def getTweetCounts(day, day_last=None):
 
 
 # Recursive function to return tweet collection for a given day
-def getTweetCollection(day, max_results_day, max_results_rx):
-    total_results = 0
-    flag = True
-    next_token = None
+def getTweetCollection(day, max_results, max_results_rx):
 
-    start_time, end_time = tweet_time(day)
-    url = create_url(keyword, start_time, end_time, max_results_rx)
+    # Sample hourly (24/day)
+    for hour in range(1, 24):
 
-    while flag:
-        # Check if max_results_day reached
-        if total_results > max_results_day:
-            break
-
-        # Otherwise, carry out request
-        json_response = connect_to_endpoint(url[0], headers, url[1], next_token)
-        result_count = json_response['meta']['result_count']
-
-        if 'next_token' in json_response['meta']:
-            # Save the token to use for next call
-            next_token = json_response['meta']['next_token']
-
-            if result_count is not None and result_count > 0 and next_token is not None:
-                print("Start Date: ", start_time)
-                append_to_csv(json_response, "data.csv")
-                total_results += result_count
-                time.sleep(3)
+        total_results = 0
+        flag = True
+        next_token = None
         
-        # if no token exists
-        else:
-            if result_count is not None and result_count > 0:
-                append_to_csv(json_response, "data.csv")
-                total_results += result_count
-                time.sleep(3)
+        start_time, end_time = tweet_time_hour(day, hour)
+        url = create_url(keyword, start_time, end_time, max_results_rx)
 
-            next_token = None
-            flag = False
+        while flag:
+            # Check if max_results_day/hour reached
+            if total_results > max_results:
+                break
+
+            # Otherwise, carry out request
+            json_response = connect_to_endpoint(url[0], headers, url[1], next_token)
+            result_count = json_response['meta']['result_count']
+
+            if 'next_token' in json_response['meta']:
+                # Save the token to use for next call
+                next_token = json_response['meta']['next_token']
+
+                if result_count is not None and result_count > 0 and next_token is not None:
+                    print("Start Date: ", start_time)
+                    append_to_csv(json_response, "data.csv")
+                    total_results += result_count
+                    time.sleep(3)
+            
+            # if no token exists
+            else:
+                if result_count is not None and result_count > 0:
+                    append_to_csv(json_response, "data.csv")
+                    total_results += result_count
+                    time.sleep(3)
+
+                next_token = None
+                flag = False
         
 
 # CSV from JSON parser
@@ -278,11 +298,10 @@ def main():
     csvFile.close()
 
     # Make the Twitter API requests
-    getTweetCollection(first_date, max_results_day, max_results_rx)
-
-    # json_response = connect_to_endpoint(url[0], headers, url[1]) 
-    # write_json(json_response)
-    # print(json.dumps(json_response, indent=4, sort_keys=True))
+    # Offset %2 to sparsely fill in the data set; starting with 1, then 2
+    for delta in range(1, 5, 2): # duration_days
+        day = first_date + timedelta(days=delta)
+        getTweetCollection(day, max_results_hour, max_results_rx)
 
 
 # -------------------------------------------------------------------------------
@@ -293,19 +312,18 @@ last_date = date(2021, 11, 1)
 # Add 1 to be inclusive of final day
 duration_days = (first_date - last_date).days + 1 
 
-day = first_date + timedelta(days=1)
-
 bearer_token = auth()
 headers = create_headers(bearer_token)
 
 keyword = '"global warming" OR "climate change" OR #globalwarming OR #climatechange lang:en'
 start_time = "2016-01-01T00:00:00.000Z"
 end_time = "2021-11-01T00:00:00.000Z"
-max_results_rx = 500 # 500 max
-max_results_day = 4500 # ~4500 
+max_results_rx = 200 # 500 max / 200 for hourly model
+max_results_hour = 200
+max_results_day = 5000 # ~4500 
 
 
 # Let's go!
 if __name__ == "__main__":
-    getTweetCounts(first_date, last_date)
-    # main()
+    # getTweetCounts(first_date, last_date)
+    main()
