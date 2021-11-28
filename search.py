@@ -134,7 +134,7 @@ def getTweetCounts(day, day_last=None):
             # Save the token to use for next call
             next_token = json_response['meta']['next_token']
             if result_count is not None and result_count > 0 and next_token is not None:
-                print("Start Date: ", start_time)
+                print("Current Date: ", start_time)
                 total_results += result_count
                 print(total_results)
                 time.sleep(3)
@@ -142,7 +142,7 @@ def getTweetCounts(day, day_last=None):
         # if no token exists
         else:
             if result_count is not None and result_count > 0:
-                print("Start Date: ", start_time)
+                print("Current Date: ", start_time)
                 total_results += result_count
                 print(total_results)
                 time.sleep(3)
@@ -152,12 +152,13 @@ def getTweetCounts(day, day_last=None):
 
 
 # Return tweet collection for a given day/duration
-def getTweetCollection(day, max_results, max_results_rx):
+def getTweetCollection(day, max_results, max_results_rx, file_name):
 
     # Sample hourly (24/day)
-    for hour in range(1, 24):
+    for hour in range(0, 24):
 
         total_results = 0
+        token_count = 0
         flag = True
         next_token = None
         
@@ -169,6 +170,14 @@ def getTweetCollection(day, max_results, max_results_rx):
             if total_results > max_results:
                 break
 
+            # Increment token_counter / check for completeness
+            if token_count >= 3:
+                next_token = None
+                flag = False
+                break
+            else:
+                token_count += 1
+
             # Otherwise, carry out request
             json_response = connect_to_endpoint(url[0], headers, url[1], next_token)
             result_count = json_response['meta']['result_count']
@@ -178,15 +187,15 @@ def getTweetCollection(day, max_results, max_results_rx):
                 next_token = json_response['meta']['next_token']
 
                 if result_count is not None and result_count > 0 and next_token is not None:
-                    print("Start Date: ", start_time)
-                    append_to_csv(json_response, "data.csv")
+                    print("Current Date: ", start_time)
+                    append_to_csv(json_response, file_name)
                     total_results += result_count
                     time.sleep(3)
             
             # if no token exists
             else:
                 if result_count is not None and result_count > 0:
-                    append_to_csv(json_response, "data.csv")
+                    append_to_csv(json_response, file_name)
                     total_results += result_count
                     time.sleep(3)
 
@@ -195,12 +204,12 @@ def getTweetCollection(day, max_results, max_results_rx):
         
 
 # CSV from JSON parser
-def append_to_csv(json_response, fileName):
+def append_to_csv(json_response, file_name):
 
     counter = 0
 
     # Open OR create the target CSV file
-    csvFile = open(fileName, "a", newline="", encoding='utf-8')
+    csvFile = open(file_name, "a", newline="", encoding='utf-8')
     csvWriter = csv.writer(csvFile)
 
     # For each tweet in API response
@@ -285,19 +294,22 @@ def append_to_csv(json_response, fileName):
 # Primary function to run script
 def main():
 
-    # Create CSV file
-    csvFile = open("data.csv", "a", newline="", encoding='utf-8')
-    csvWriter = csv.writer(csvFile)
-
-    # Create headers for the CSV data · note: this should correspond to content from 'append_to_csv'
-    csvWriter.writerow(['author id', 'created_at', 'geo', 'tweet_id','lang', 'like_count', 'quote_count', 'reply_count','retweet_count','source','tweet', 'username', 'name', 'account_description', 'account_created_at', 'verified', 'followers_count', 'following_count', 'tweet_count', 'listed_count'])
-    csvFile.close()
-
     # Make the Twitter API requests
     # Offset %2 to sparsely fill in the data set; starting with 1, then 2
-    for delta in range(1, 5, 2): # duration_days
+    for delta in range(0, 2, 2): # duration_days
+        
         day = first_date + timedelta(days=delta)
-        getTweetCollection(day, max_results_hour, max_results_rx)
+        file_name = 'data/' + day.isoformat() + '.csv'
+
+        # Create CSV file
+        csvFile = open(file_name, "a", newline="", encoding='utf-8')
+        csvWriter = csv.writer(csvFile)
+
+        # Create headers for the CSV data · note: this should correspond to content from 'append_to_csv'
+        csvWriter.writerow(['author id', 'created_at', 'geo', 'tweet_id','lang', 'like_count', 'quote_count', 'reply_count','retweet_count','source','tweet', 'username', 'name', 'account_description', 'account_created_at', 'verified', 'followers_count', 'following_count', 'tweet_count', 'listed_count'])
+        csvFile.close()
+
+        getTweetCollection(day, max_results_hour, max_results_rx, file_name)
 
 
 # ----------------------------------------------------------------------------
@@ -315,9 +327,9 @@ keyword = '"global warming" OR "climate change" OR #globalwarming OR #climatecha
 start_time = "2016-01-01T00:00:00.000Z"
 end_time = "2021-11-01T00:00:00.000Z"
 
-max_results_rx = 200 # 500 max / 200 for hourly model
-max_results_hour = 200
-max_results_day = 5000 # ~4500 
+max_results_rx = 100 # 500 max / 200 for hourly model
+max_results_hour = 300 # 200 
+max_results_day = 7500 # for bi-daly / bi-monthly sampling
 
 
 # Let's go!

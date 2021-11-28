@@ -131,4 +131,6 @@ dmypy.json
 # Client secrets
 secrets.py
 
+# Data
 data/*
+data-test/*
