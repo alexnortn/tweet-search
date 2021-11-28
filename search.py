@@ -8,10 +8,13 @@ import csv
 # Client secrets
 import secrets
 
-# To set your environment variables in your terminal run the following line:
-# export 'BEARER_TOKEN'='<your_bearer_token>'
-# bearer_token = os.environ.get("BEARER_TOKEN")
-# bearer_token = secrets.bearer_token
+# Collection of scripts to facilitate the compilation of datasets from Twitter v2 API
+# Note: these scripts are optmized for the v2 API academic access tier
+
+# Alex Norton · 2021 ~ MIT License
+
+# Largely inspired/grateful for the excellent tutorial provided by Andrew Edward on Towards Data Science
+# https://towardsdatascience.com/an-extensive-guide-to-collecting-tweets-from-twitter-api-v2-for-academic-research-using-python-3-518fcb71df2a
 
 
 # Transform datetime into twitter time
@@ -41,37 +44,24 @@ def tweet_time_hour(day, hour):
     return [day_start, day_end]
 
 
+# Fetch client secrets
 def auth():
     return secrets.bearer_token
 
 
+# Create headers for API requests
 def create_headers(bearer_token):
     headers = { "Authorization": f"Bearer {bearer_token}" }
     return headers
 
-# search_url = "https://api.twitter.com/2/tweets/search/all"
 
-# Optional params: start_time,end_time,since_id,until_id,max_results,next_token,
-# expansions,tweet.fields,media.fields,poll.fields,place.fields,user.fields
-
-# query_params = {'query': '(from:twitterdev -is:retweet) OR #twitterdev','tweet.fields': 'author_id'}
-# query_params = {'query': '"global warming" OR "climate change" OR #globalwarming OR #climatechange', 'start_time': '2016-01-01', 'end_time': '2021-11-01'}
-
-def bearer_oauth(r):
-    """
-    Method required by bearer token authentication.
-    """
-
-    r.headers["Authorization"] = f"Bearer {bearer_token}"
-    r.headers["User-Agent"] = "v2FullArchiveSearchPython"
-    return r
-
-
+# Create "Search" URL, define which fields the API request will return
 def create_url(keyword, start_time, end_time, max_results = 10):
     
-    search_url = "https://api.twitter.com/2/tweets/search/all" #Change to the endpoint you want to collect data from
+    # Change to the endpoint you want to collect data from
+    search_url = "https://api.twitter.com/2/tweets/search/all"
 
-    #change params based on the endpoint you are using
+    # Change params based on the endpoint you are using
     query_params = {'query': keyword,
                     'start_time': start_time,
                     'end_time': end_time,
@@ -84,11 +74,13 @@ def create_url(keyword, start_time, end_time, max_results = 10):
     return (search_url, query_params)
 
 
+# Create "Count" URL, define which fields the API request will return
 def create_count_url(keyword, start_time, end_time):
     
-    search_url = "https://api.twitter.com/2/tweets/counts/all" #Change to the endpoint you want to collect data from
+    # Change to the endpoint you want to collect data from
+    search_url = "https://api.twitter.com/2/tweets/counts/all"
 
-    #change params based on the endpoint you are using
+    # Change params based on the endpoint you are using
     query_params = {'query': keyword,
                     'start_time': start_time,
                     'end_time': end_time,
@@ -96,17 +88,24 @@ def create_count_url(keyword, start_time, end_time):
     return (search_url, query_params)
 
 
+# Connect to the API endpoint · generalized for any Twitter API product
 def connect_to_endpoint(url, headers, params, next_token=None):
+
     params['next_token'] = next_token 
     response = requests.request("GET", url, headers=headers, params=params)
+    
     print(response.status_code)
+
     if response.status_code != 200:
         raise Exception(response.status_code, response.text)
+
     return response.json()
 
 
-def write_json(data):
-    with open('data/test-8.json', 'w') as outfile:
+# Utility function to write output in JSON format
+def write_json(data, name='test'): 
+    out_file = 'data/' + name + '.json'
+    with open(out_file, 'w') as outfile:
         json.dump(data, outfile, indent=2,)
 
 
@@ -116,6 +115,7 @@ def getTweetCounts(day, day_last=None):
     total_results = 0
     flag = True
     
+    # Format date/time with respect to input params
     if day_last:        
         start_time = day.isoformat() + 'T00:00:00.000Z' 
         end_time = day_last.isoformat() + 'T00:00:00.000Z' 
@@ -133,13 +133,12 @@ def getTweetCounts(day, day_last=None):
         if 'next_token' in json_response['meta']:
             # Save the token to use for next call
             next_token = json_response['meta']['next_token']
-
             if result_count is not None and result_count > 0 and next_token is not None:
                 print("Start Date: ", start_time)
                 total_results += result_count
                 print(total_results)
                 time.sleep(3)
-        
+
         # if no token exists
         else:
             if result_count is not None and result_count > 0:
@@ -152,7 +151,7 @@ def getTweetCounts(day, day_last=None):
             flag = False
 
 
-# Recursive function to return tweet collection for a given day
+# Return tweet collection for a given day/duration
 def getTweetCollection(day, max_results, max_results_rx):
 
     # Sample hourly (24/day)
@@ -198,18 +197,14 @@ def getTweetCollection(day, max_results, max_results_rx):
 # CSV from JSON parser
 def append_to_csv(json_response, fileName):
 
-    #A counter variable
     counter = 0
 
-    #Open OR create the target CSV file
+    # Open OR create the target CSV file
     csvFile = open(fileName, "a", newline="", encoding='utf-8')
     csvWriter = csv.writer(csvFile)
 
-    #Loop through each tweet
+    # For each tweet in API response
     for tweet in json_response['data']:        
-        
-        # We will create a variable for each since some of the keys might not exist for some tweets
-        # So we will account for that
 
         # 1. Author ID
         author_id = tweet['author_id']
@@ -241,7 +236,7 @@ def append_to_csv(json_response, fileName):
         # 8. Tweet text
         text = tweet['text']
 
-        # Join 'data' with 'meta' results
+        # Join 'data' with 'includes' results
         for tweet_meta in json_response['includes']['users']:
             if tweet['author_id'] == tweet_meta['id']:
                 # 9. Username
@@ -280,20 +275,21 @@ def append_to_csv(json_response, fileName):
         csvWriter.writerow(res)
         counter += 1
 
-    # When done, close the CSV file
+    # Close the CSV file
     csvFile.close()
 
     # Print the number of tweets for this iteration
     print("# of Tweets added from this response: ", counter)
 
 
+# Primary function to run script
 def main():
 
     # Create CSV file
     csvFile = open("data.csv", "a", newline="", encoding='utf-8')
     csvWriter = csv.writer(csvFile)
 
-    #Create headers for the data you want to save, in this example, we only want save these columns in our dataset
+    # Create headers for the CSV data · note: this should correspond to content from 'append_to_csv'
     csvWriter.writerow(['author id', 'created_at', 'geo', 'tweet_id','lang', 'like_count', 'quote_count', 'reply_count','retweet_count','source','tweet', 'username', 'name', 'account_description', 'account_created_at', 'verified', 'followers_count', 'following_count', 'tweet_count', 'listed_count'])
     csvFile.close()
 
@@ -304,13 +300,13 @@ def main():
         getTweetCollection(day, max_results_hour, max_results_rx)
 
 
-# -------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
 # Inputs for the request · 2132 days » 4500 tweets/day ~ 9 requests / day
-# To avoid asking for duplicates, really we want to ask for 4500 tweets / day and use the nextPage token
+# To avoid asking for duplicates, really we want to ask for 4500 tweets / day
+
 first_date = date(2016, 1, 1)
 last_date = date(2021, 11, 1)
-# Add 1 to be inclusive of final day
-duration_days = (first_date - last_date).days + 1 
+duration_days = (first_date - last_date).days + 1 # Add 1 to be inclusive of final day
 
 bearer_token = auth()
 headers = create_headers(bearer_token)
@@ -318,6 +314,7 @@ headers = create_headers(bearer_token)
 keyword = '"global warming" OR "climate change" OR #globalwarming OR #climatechange lang:en'
 start_time = "2016-01-01T00:00:00.000Z"
 end_time = "2021-11-01T00:00:00.000Z"
+
 max_results_rx = 200 # 500 max / 200 for hourly model
 max_results_hour = 200
 max_results_day = 5000 # ~4500 
