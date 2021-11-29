@@ -97,6 +97,11 @@ def connect_to_endpoint(url, headers, params, next_token=None):
     print(response.status_code)
 
     if response.status_code != 200:
+        # If too many requests, wait for cool down period; then run again
+        if response.status_code == 429:
+            time.sleep(120)
+            return connect_to_endpoint(url, headers, params, next_token)
+        #  Otherwise raise exception
         raise Exception(response.status_code, response.text)
 
     return response.json()
@@ -190,14 +195,14 @@ def getTweetCollection(day, max_results, max_results_rx, file_name):
                     print("Current Date: ", start_time)
                     append_to_csv(json_response, file_name)
                     total_results += result_count
-                    time.sleep(3)
+                    time.sleep(5)
             
             # if no token exists
             else:
                 if result_count is not None and result_count > 0:
                     append_to_csv(json_response, file_name)
                     total_results += result_count
-                    time.sleep(3)
+                    time.sleep(5)
 
                 next_token = None
                 flag = False
@@ -222,8 +227,11 @@ def append_to_csv(json_response, file_name):
         created_at = dateutil.parser.parse(tweet['created_at'])
 
         # 3. Geolocation
-        if ('geo' in tweet):   
-            geo = tweet['geo']['place_id']
+        if ('geo' in tweet):
+            if ('place_id' in tweet['geo']):   
+                geo = tweet['geo']['place_id']
+            else:
+                geo = " "
         else:
             geo = " "
 
@@ -295,8 +303,8 @@ def append_to_csv(json_response, file_name):
 def main():
 
     # Make the Twitter API requests
-    # Offset %2 to sparsely fill in the data set; starting with 1, then 2
-    for delta in range(0, 2132, 2): # duration_days
+    # Offset %2 to sparsely fill in the data set; starting with 0, then 1
+    for delta in range(488, 2132, 2): # starting at 210 due to runtime error
         
         day = first_date + timedelta(days=delta)
         file_name = 'data/' + day.isoformat() + '.csv'
