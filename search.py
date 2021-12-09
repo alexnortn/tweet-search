@@ -101,6 +101,10 @@ def connect_to_endpoint(url, headers, params, next_token=None):
         if response.status_code == 429:
             time.sleep(120)
             return connect_to_endpoint(url, headers, params, next_token)
+        # If there's a momentary internet outage
+        if response.status_code == 503:
+            time.sleep(120)
+            return connect_to_endpoint(url, headers, params, next_token)            
         #  Otherwise raise exception
         raise Exception(response.status_code, response.text)
 
@@ -304,7 +308,7 @@ def main():
 
     # Make the Twitter API requests
     # Offset %2 to sparsely fill in the data set; starting with 0, then 1
-    for delta in range(488, 2132, 2): # starting at 210 due to runtime error
+    for delta in range(1, 2132, 2):
         
         day = first_date + timedelta(days=delta)
         file_name = 'data/' + day.isoformat() + '.csv'

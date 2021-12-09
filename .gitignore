@@ -133,4 +133,6 @@ secrets.py
 
 # Data
 data/*
+data_all/*
+data_odd/*
 data-test/*
